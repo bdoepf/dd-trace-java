@@ -1,0 +1,75 @@
+* Autotrace plan
+FIXME: Remove this file and ensure core concepts are captured in comments.
+
+Goal: Automatically trace slow classes and methods invoked in the context of an existing trace
+* How it works conceptually
+For synchronous code, methods can be thought of as a node in a graph. Each method invocation is an edge between these nodes.
+
+We can effectively weigh these edges and trace nodes with sufficiently costly traversal.
+
+Effectively, this should show us the interesting, performance critical methods with clear source-code locations.
+
+- A trace begins on a method, M1.
+- Add middleware-expansion to M1
+  - Investigate the bytecode of M1. Discovers invoked methods: M2 and M3.
+  - Add middleware-timer to all discovered methods: M2 and M3
+- middleware-timer advice
+  - OnMethodEnter:
+  - if there is an existing trace
+    - take a cpu timestamp and pass to exit advice
+  - OnMethodExit: if there is a timestamp:
+    - compute duration:
+    - if duration > 10ms
+      - create span with with duration and class+method name
+      - trigger middleware expansion of the timed method (unless already expanded)
+* Terms
+- Discovery: The process of scanning the bytecode of a method
+- DiscoveryDepth: How many levels deep to expand during discovery. Only 1 for POC.
+- DiscoveredNode: A class+method which has a timer attached to it.
+  - Also, a list of other nodes linked to this
+- Expansion/NodeExpansion: The process of following the edges of a node and discovering new nodes
+- DynamicSpan: Span-advice which may or may not report spans depending on the duration of the trace
+* Implementation
+- agent bootstrap
+  - package: autotrace
+    - class: DiscoveredNode // TODO: better name?
+      - Reference to a node (class + method)
+      - List of other nodes adjacent to the current node
+      - boolean isExpanded?
+    - class: TraceDiscoveryGraph
+      - Global store of discovered nodes
+      - static method: discover(DiscoveredNode node)
+      - static method: expand(clazz, method)
+  - module: autotrace-instrumentation
+    - Matcher:
+      - Ask the TraceDiscoveryGraph if the class is discovered
+      - Method matchers for DiscoveredNodes
+    - Advice:
+      - Edge-discovery:
+        - examine bytecode and notice all methods invoked.
+        - Add a discovered node to the graph on completion
+      - OnMethodEnter:
+        - if there is an existing trace:
+          - take a cpu timestamp and pass to exit advice
+      - OnMethodExit: if there is a timestamp:
+        - compute duration
+        - if duration > 10ms
+          - create span with with duration and class+method name
+          - trigger middleware expansion of the timed method (unless already expanded)
+* Risks
+- Recursion: A -> B -> A ...
+  - Could look ugly
+- Performance
+  - How much of an impact will this have?
+  - We will pay a warmup penalty. How much?
+  - Must be mindful of the impact on "fast" methods
+  - Can eventually add logic to "untransform" performance critical methods.
+- Could we potentially trace too many spans and spam up the flame graph?
+  - We could prune the automatic traces and keep the top N most interesting.
+* Open Questions
+- Optimal discoverydepth performance
+- How to play nice with existing instrumentation
+  - For example, "discovering" something we're tracing using a callback-style approach could be awkward.
+- Can we "discover" our own instrumentation? Bug or feature?
+- Taking the graph idea further, what if we dropped the tracing idea alltogether and just generated the graph?
+- Lots more. Can generate a full list later
