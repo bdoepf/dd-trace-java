@@ -119,6 +119,10 @@ public class SpockRunner extends Sputnik {
       // if info starts with bootstrap prefix: add to bootstrap jar
       for (int i = 0; i < TEST_BOOTSTRAP_PREFIXES.length; ++i) {
         if (info.getName().startsWith(TEST_BOOTSTRAP_PREFIXES[i])) {
+          if (info.getSimpleName().equals("TraceDiscoveryGraph")) {
+            // TODO: rm
+            System.out.println("------- DISC GRAPH IN BS -----------");
+          }
           bootstrapClasses.add(info.getResourceName());
           break;
         }

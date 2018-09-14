@@ -1,3 +1,7 @@
+* Keep in mind:
+- Code in the JVM is a collection of methods namespaced by methodSig, className, and classLoader
+- We're making a graph of these methods and their relationship to other methods
+- Lots of info can be gleaned statically, but ultimately namespacing is determined at runtime.
 * Autotrace plan
 FIXME: Remove this file and ensure core concepts are captured in comments.
 
@@ -72,4 +76,6 @@ Effectively, this should show us the interesting, performance critical methods w
   - For example, "discovering" something we're tracing using a callback-style approach could be awkward.
 - Can we "discover" our own instrumentation? Bug or feature?
 - Taking the graph idea further, what if we dropped the tracing idea alltogether and just generated the graph?
+- Special considerations for classloaders?
+  - If we want to discover SomeClass.SomeMethod, should we care about the classloader for SomeClass or just discover SomeClass under all potential loaders?
 - Lots more. Can generate a full list later
