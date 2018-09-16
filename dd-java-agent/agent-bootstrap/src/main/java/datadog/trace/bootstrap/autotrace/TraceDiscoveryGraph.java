@@ -1,5 +1,6 @@
 package datadog.trace.bootstrap.autotrace;
 
+import datadog.trace.bootstrap.WeakMap;
 import datadog.trace.bootstrap.WeakMap.Provider;
 
 import java.util.Collections;
@@ -22,7 +23,8 @@ public class TraceDiscoveryGraph {
    */
   public static final long AUTOTRACE_THRESHOLD_NANO = 10 * 1000000; // 10ms
 
-  private static final Map<ClassLoader, Map<String, List<DiscoveredNode>>> nodeMap = (Map<ClassLoader, Map<String, List<DiscoveredNode>>>) Provider.newWeakMap();
+  // private static final Map<ClassLoader, Map<String, List<DiscoveredNode>>> nodeMap = (Map<ClassLoader, Map<String, List<DiscoveredNode>>>) Provider.newWeakMap();
+  private static final WeakMap<ClassLoader, Map<String, List<DiscoveredNode>>> nodeMap = Provider.<ClassLoader, Map<String, List<DiscoveredNode>>>newWeakMap();
   private static final Set<DiscoveredNode> discoveredNodes = Collections.newSetFromMap(new ConcurrentHashMap<DiscoveredNode, Boolean>());
 
   private TraceDiscoveryGraph() {}

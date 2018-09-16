@@ -121,7 +121,7 @@ public class SpockRunner extends Sputnik {
         if (info.getName().startsWith(TEST_BOOTSTRAP_PREFIXES[i])) {
           if (info.getSimpleName().equals("TraceDiscoveryGraph")) {
             // TODO: rm
-            System.out.println("------- DISC GRAPH IN BS -----------");
+            // System.out.println("------- DISC GRAPH IN BS -----------");
           }
           bootstrapClasses.add(info.getResourceName());
           break;
@@ -184,10 +184,12 @@ public class SpockRunner extends Sputnik {
       synchronized (super.getClassLoadingLock(name)) {
         Class c = this.findLoadedClass(name);
         if (c != null) {
+          // System.out.println("ICL -- already loaded " + name);
           return c;
         }
         if (name.startsWith(shadowPrefix)) {
           try {
+            // System.out.println("ICL -- shadow " + name);
             return shadow(super.loadClass(name, resolve));
           } catch (Exception e) {
           }
@@ -203,7 +205,20 @@ public class SpockRunner extends Sputnik {
           }
         }
         */
-        return parent.loadClass(name);
+        // System.out.println("ICL -- delegate " + name + " --> " + parent);
+        try {
+          return parent.loadClass(name);
+        } catch (Exception e) {
+          // System.out.println("ICL -- threw on delegate " + name + " --> " + e.getMessage());
+          /*
+          System.out.flush();
+          System.err.println("ICL -- threw on delegate " + name + " --> " + parent);
+          e.printStackTrace();
+          System.err.println("  END --" );
+          System.err.flush();
+          */
+          throw e;
+        }
       }
     }
   }
