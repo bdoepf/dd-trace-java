@@ -19,11 +19,11 @@ class ListWriterAssert {
     size = writer.size()
   }
 
-  static void assertTraces(ListWriter writer, int expectedSize,
+  static void assertTraces(ListWriter writer, int expectedNumTraces,
                            @DelegatesTo(value = ListWriterAssert, strategy = Closure.DELEGATE_FIRST) Closure spec) {
     try {
-      writer.waitForTraces(expectedSize)
-      assert writer.size() == expectedSize
+      writer.waitForTraces(expectedNumTraces)
+      assert writer.size() == expectedNumTraces
       def asserter = new ListWriterAssert(writer)
       def clone = (Closure) spec.clone()
       clone.delegate = asserter
@@ -54,7 +54,7 @@ class ListWriterAssert {
     return writer.get(index)
   }
 
-  void trace(int index, int expectedSize,
+  void trace(int index, int expectedNumSpans,
              @DelegatesTo(value = TraceAssert, strategy = Closure.DELEGATE_FIRST) Closure spec) {
     if (index >= size) {
       throw new ArrayIndexOutOfBoundsException(index)
@@ -63,7 +63,7 @@ class ListWriterAssert {
       throw new ConcurrentModificationException("ListWriter modified during assertion")
     }
     assertedIndexes.add(index)
-    assertTrace(writer.get(index), expectedSize, spec)
+    assertTrace(writer.get(index), expectedNumSpans, spec)
   }
 
   void assertTracesAllVerified() {

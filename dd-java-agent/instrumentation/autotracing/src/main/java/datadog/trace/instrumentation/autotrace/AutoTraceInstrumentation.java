@@ -33,8 +33,8 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
       @Override
       public boolean matches(TypeDescription target) {
         // FIXME: Classloader matcher
-        return false;
-        // return TraceDiscoveryGraph.isDiscovered(AutoTraceInstrumentation.class.getClassLoader(), target.getName());
+        // FIXME: should not use this classloader!
+        return TraceDiscoveryGraph.isDiscovered(AutoTraceInstrumentation.class.getClassLoader(), target.getName());
       }
     };
   }

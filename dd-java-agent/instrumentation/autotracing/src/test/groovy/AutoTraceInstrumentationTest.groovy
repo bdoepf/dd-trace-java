@@ -1,6 +1,7 @@
 import datadog.trace.bootstrap.JDBCMaps
 import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph
 import io.opentracing.tag.Tags
+import net.bytebuddy.agent.ByteBuddyAgent
 
 import static datadog.trace.agent.test.TestUtils.runUnderTrace
 import static datadog.trace.agent.test.asserts.ListWriterAssert.assertTraces
@@ -9,14 +10,6 @@ import datadog.trace.agent.test.AgentTestRunner
 import net.bytebuddy.utility.JavaModule
 
 class AutoTraceInstrumentationTest extends AgentTestRunner {
-  /*
-  @Override
-  protected boolean onInstrumentationError(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded, Throwable throwable) {
-    // TODO: sane way to ignore these errors
-    return false
-  }
-  */
-
   def "trace after discovery"() {
     when:
     runUnderTrace("someTrace") {
@@ -39,21 +32,18 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
 
     when:
     TEST_WRITER.clear()
-    // FIXME: NoClassDefFoundError when getting discovery graph. Groovy metaclass weirdness.
-    println TraceDiscoveryGraph.AUTOTRACE_THRESHOLD_NANO
-    /*
-    Class<?> clazz = ClassLoader.getSystemClassLoader().loadClass("datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph")
-    clazz.getDeclaredMethod("discover", ClassLoader, String, String)
-      .invoke(Helper1.getClassLoader(), Helper1.getName(), "someMethod(long)")
-      */
-    // TraceDiscoveryGraph.discover(Helper1.getClassLoader(), Helper1.getName(), "someMethod(long)")
+    // FIXME: should use classloader: Helper1.getClassLoader()
+    TraceDiscoveryGraph.discover(AgentTestRunner.getClassLoader(), Helper1.getName(), "someMethod(long)")
+    // FIXME: manual retransform
+    println "-- RETRANSFORM!"
+    ByteBuddyAgent.getInstrumentation().retransformClasses(Helper1)
+    println "-- /RETRANSFORM!"
+    // /FIXME: manual retransform
     runUnderTrace("someTrace") {
       new Helper1().someMethod(11)
     }
 
     then:
-    noExceptionThrown()
-    /*
     assertTraces(TEST_WRITER, 1) {
       trace(0, 2) {
         span(0) {
@@ -75,7 +65,6 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
         }
       }
     }
-    */
   }
 
   static class Helper1 {
