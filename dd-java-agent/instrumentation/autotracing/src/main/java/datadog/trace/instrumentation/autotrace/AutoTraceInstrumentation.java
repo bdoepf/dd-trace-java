@@ -7,7 +7,6 @@ import datadog.trace.agent.tooling.Instrumenter;
 
 import java.security.ProtectionDomain;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -34,13 +33,10 @@ import net.bytebuddy.pool.TypePool;
 import net.bytebuddy.utility.JavaModule;
 
 import static io.opentracing.log.Fields.ERROR_OBJECT;
-import static net.bytebuddy.matcher.ElementMatchers.any;
 
 @Slf4j
 @AutoService(Instrumenter.class)
 public final class AutoTraceInstrumentation extends Instrumenter.Default {
-  private final ThreadLocal<ClassLoader> loaderUnderTransform = new ThreadLocal<>();
-  private final ThreadLocal<TypeDescription> typeUnderTransform = new ThreadLocal<>();
 
   public AutoTraceInstrumentation() {
     super("autotrace");
@@ -51,6 +47,9 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
   public AgentBuilder instrument(final AgentBuilder parentAgentBuilder) {
     // TODO: ugly
     // FIXME: strong classloader ref
+    final ThreadLocal<ClassLoader> loaderUnderTransform = new ThreadLocal<>();
+    final ThreadLocal<TypeDescription> typeUnderTransform = new ThreadLocal<>();
+
     return parentAgentBuilder
         .type(
             new AgentBuilder.RawMatcher() {
@@ -89,7 +88,15 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
                       }
                     },
                     AutoTraceAdvice.class.getName()))
-        .asDecorator();
+      .transform(new AgentBuilder.Transformer() {
+        @Override
+        public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module) {
+          // Hook up last to avoid discovering advice bytecode.
+          // TODO: How to handle other instrumentation's bytecode?
+          return builder.visit(new MethodExpander(classLoader, typeDescription.getName(), TraceDiscoveryGraph.getDiscoveredNodes(classLoader, typeDescription.getName())));
+        }
+      })
+      .asDecorator();
   }
 
   @Override
@@ -108,17 +115,19 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
       if (GlobalTracer.get().activeSpan() != null) {
         return System.nanoTime();
       }
-      return -1l;
+      // TODO: improve no-trace path
+      return Long.MIN_VALUE;
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopTimerAndCreateSpan(
-        @Advice.Origin("#t.#m") final String typeAndMethodName,
+        @Advice.Origin("#t") final String typeName,
+        @Advice.Origin("#m") final String methodName,
         @Advice.Enter final long startTS,
         @Advice.Thrown final Throwable throwable) {
       // TODO
-      // System.out.println("TRACE METHOD? " + typeAndMethodName);
-      if (startTS > 0l) {
+      System.out.println("TRACE METHOD? " + typeName + "." + methodName + " ");
+      if (startTS > Long.MIN_VALUE) {
         final Tracer globalTracer = GlobalTracer.get(); // TODO: move to method variable scope
         // ensure the active span was not removed in the method body
         // System.out.println(" ^^ maybe: " + globalTracer.activeSpan());
@@ -129,7 +138,7 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
           if (durationNano >= TraceDiscoveryGraph.AUTOTRACE_THRESHOLD_NANO) {
             final Scope scope =
                 GlobalTracer.get()
-                    .buildSpan(typeAndMethodName)
+                    .buildSpan(typeName.replaceAll("^.*\\.([^\\.]+)", "$1") + "." + methodName)
                     .withTag(Tags.COMPONENT.getKey(), "autotrace")
                     .withStartTimestamp(TimeUnit.NANOSECONDS.toMicros(startTS))
                     .startActive(true);

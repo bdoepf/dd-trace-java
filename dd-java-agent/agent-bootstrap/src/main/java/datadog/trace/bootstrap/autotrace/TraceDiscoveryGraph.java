@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * TODO: Doc
  * TODO: Implement
- * TODO: autotrace package
+ * TODO: Use DI pattern for supplying graph to pieces of autodiscovery
  */
 @Slf4j
 public class TraceDiscoveryGraph {
@@ -30,7 +30,6 @@ public class TraceDiscoveryGraph {
 
   private static final AtomicReference<Instrumentation> instrumentationRef = new AtomicReference<>(null);
   private static final WeakMap<ClassLoader, Map<String, List<DiscoveredNode>>> nodeMap = Provider.<ClassLoader, Map<String, List<DiscoveredNode>>>newWeakMap();
-  private static final Set<DiscoveredNode> discoveredNodes = Collections.newSetFromMap(new ConcurrentHashMap<DiscoveredNode, Boolean>());
 
   // FIXME: use standard bootstrap placeholder (see Utils)
   private static final ClassLoader BOOTSTRAP = new ClassLoader() {
@@ -42,50 +41,81 @@ public class TraceDiscoveryGraph {
 
   private TraceDiscoveryGraph() {}
 
-  public static void discover(ClassLoader classloader, String className, String methodSignature) {
+  public static DiscoveredNode discoverOrGet(ClassLoader classloader, String className, String methodSignature) {
     if (null == classloader) classloader = BOOTSTRAP;
-    final DiscoveredNode node = new DiscoveredNode(classloader, className, methodSignature);
-    if (discoveredNodes.add(node)) {
-      if (!nodeMap.containsKey(classloader)) {
-        synchronized (nodeMap) {
-          if (!nodeMap.containsKey(classloader)) {
-            nodeMap.put(classloader, new ConcurrentHashMap<String, List<DiscoveredNode>>());
-          }
-        }
-      }
-      final Map<String, List<DiscoveredNode>> classMap = nodeMap.get(classloader);
-      if (!classMap.containsKey(className)) {
-        synchronized (classMap) {
-          if (!classMap.containsKey(className)) {
-            classMap.put(className, new CopyOnWriteArrayList<DiscoveredNode>());
-          }
-        }
-      }
-      final List<DiscoveredNode> nodeList = classMap.get(className);
-      nodeList.add(node);
+    try {
+      // TODO: Classloading is a mess
+      Class<?> clazz = classloader.loadClass(className);
+      classloader = clazz.getClassLoader();
+    } catch (ClassNotFoundException e) {
+      throw new RuntimeException(e);
+    }
 
-      final Instrumentation instrumentation = instrumentationRef.get();
-      if (instrumentation != null) {
-        try {
-          instrumentation.retransformClasses(classloader.loadClass(className));
-        } catch (Exception e) {
-          log.debug("Failed to retransform " + className + " on loader " + classloader, e);
+    if (null == classloader) classloader = BOOTSTRAP;
+    if (!nodeMap.containsKey(classloader)) {
+      synchronized (nodeMap) {
+        if (!nodeMap.containsKey(classloader)) {
+          nodeMap.put(classloader, new ConcurrentHashMap<String, List<DiscoveredNode>>());
         }
       }
     }
+    final Map<String, List<DiscoveredNode>> classMap = nodeMap.get(classloader);
+    if (!classMap.containsKey(className)) {
+      synchronized (classMap) {
+        if (!classMap.containsKey(className)) {
+          classMap.put(className, new CopyOnWriteArrayList<DiscoveredNode>());
+        }
+      }
+    }
+    final List<DiscoveredNode> nodeList = classMap.get(className);
+    for (final DiscoveredNode node : nodeList) {
+      if (node.getMethodSignature().equals(methodSignature)) {
+        return node;
+      }
+    }
+
+    final DiscoveredNode newNode = new DiscoveredNode(classloader, className, methodSignature);
+    nodeList.add(newNode);
+    final Instrumentation instrumentation = instrumentationRef.get();
+    if (instrumentation != null) {
+      try {
+        instrumentation.retransformClasses(classloader.loadClass(className));
+      } catch (Exception e) {
+        log.debug("Failed to retransform " + className + " on loader " + classloader, e);
+      }
+    }
+    return newNode;
   }
 
   public static void expand(Object clazz, Object method) {
   }
 
   public static boolean isDiscovered(ClassLoader classloader, String className) {
+    return getDiscoveredNodes(classloader, className) != null;
+  }
+
+  public static List<DiscoveredNode> getDiscoveredNodes(ClassLoader classloader, String className) {
     if (null == classloader) classloader = BOOTSTRAP;
-    return nodeMap.containsKey(classloader) && nodeMap.get(classloader).containsKey(className);
+    if (nodeMap.containsKey(classloader)) {
+      return nodeMap.get(classloader).get(className);
+    }
+    return null;
   }
 
   public static boolean isDiscovered(ClassLoader classloader, String className, String methodSignature) {
     if (null == classloader) classloader = BOOTSTRAP;
-    return discoveredNodes.contains(new DiscoveredNode(classloader, className, methodSignature));
+    final Map<String, List<DiscoveredNode>> classMap = nodeMap.get(classloader);
+    if (null != classMap) {
+      final List<DiscoveredNode> nodes = classMap.get(className);
+      if (null != nodes) {
+        for (final DiscoveredNode node : nodes) {
+          if (node.getMethodSignature().equals(methodSignature)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   public static void registerInstrumentation(Instrumentation instrumentation) {
