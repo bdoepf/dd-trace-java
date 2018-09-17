@@ -7,7 +7,6 @@ import static datadog.trace.agent.test.TestUtils.runUnderTrace
 import static datadog.trace.agent.test.asserts.ListWriterAssert.assertTraces
 
 import datadog.trace.agent.test.AgentTestRunner
-import net.bytebuddy.utility.JavaModule
 
 class AutoTraceInstrumentationTest extends AgentTestRunner {
   def "trace after discovery"() {
@@ -32,13 +31,7 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
 
     when:
     TEST_WRITER.clear()
-    // FIXME: should use classloader: Helper1.getClassLoader()
-    TraceDiscoveryGraph.discover(AgentTestRunner.getClassLoader(), Helper1.getName(), "someMethod(long)")
-    // FIXME: manual retransform
-    println "-- RETRANSFORM!"
-    ByteBuddyAgent.getInstrumentation().retransformClasses(Helper1)
-    println "-- /RETRANSFORM!"
-    // /FIXME: manual retransform
+    TraceDiscoveryGraph.discover(Helper1.getClassLoader(), Helper1.getName(), "someMethod(long)")
     runUnderTrace("someTrace") {
       new Helper1().someMethod(11)
     }
@@ -79,20 +72,11 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
       // Trace is abnormally slow. Skip assertion.
       slowTestRun = true
     }
+    TEST_WRITER.waitForTraces(1)
 
     then:
-    slowTestRun ? true : assertTraces(TEST_WRITER, 1) {
-      trace(0, 1) {
-        span(0) {
-          serviceName "unnamed-java-app"
-          operationName "someTrace"
-          errored false
-          tags {
-            defaultTags()
-          }
-        }
-      }
-    }
+    TEST_WRITER.size() == 1
+    TEST_WRITER[0].size() == slowTestRun ? 2 : 1
   }
 
   static class Helper1 {
