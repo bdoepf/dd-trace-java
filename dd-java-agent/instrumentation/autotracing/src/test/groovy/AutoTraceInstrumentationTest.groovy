@@ -31,7 +31,7 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
 
     when:
     TEST_WRITER.clear()
-    TraceDiscoveryGraph.discover(Helper1.getClassLoader(), Helper1.getName(), "someMethod(long)")
+    TraceDiscoveryGraph.discover(Helper1.getClassLoader(), Helper1.getName(), "someMethod(J)V")
     runUnderTrace("someTrace") {
       new Helper1().someMethod(11)
     }

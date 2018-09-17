@@ -32,9 +32,18 @@ public class TraceDiscoveryGraph {
   private static final WeakMap<ClassLoader, Map<String, List<DiscoveredNode>>> nodeMap = Provider.<ClassLoader, Map<String, List<DiscoveredNode>>>newWeakMap();
   private static final Set<DiscoveredNode> discoveredNodes = Collections.newSetFromMap(new ConcurrentHashMap<DiscoveredNode, Boolean>());
 
+  // FIXME: use standard bootstrap placeholder (see Utils)
+  private static final ClassLoader BOOTSTRAP = new ClassLoader() {
+    @Override
+    public String toString() {
+      return "<bootstrap-classloader>";
+    }
+  };
+
   private TraceDiscoveryGraph() {}
 
   public static void discover(ClassLoader classloader, String className, String methodSignature) {
+    if (null == classloader) classloader = BOOTSTRAP;
     final DiscoveredNode node = new DiscoveredNode(classloader, className, methodSignature);
     if (discoveredNodes.add(node)) {
       if (!nodeMap.containsKey(classloader)) {
@@ -60,7 +69,7 @@ public class TraceDiscoveryGraph {
         try {
           instrumentation.retransformClasses(classloader.loadClass(className));
         } catch (Exception e) {
-          log.debug("Failed to retransform " + className + " on loder " + classloader, e);
+          log.debug("Failed to retransform " + className + " on loader " + classloader, e);
         }
       }
     }
@@ -70,15 +79,13 @@ public class TraceDiscoveryGraph {
   }
 
   public static boolean isDiscovered(ClassLoader classloader, String className) {
+    if (null == classloader) classloader = BOOTSTRAP;
     return nodeMap.containsKey(classloader) && nodeMap.get(classloader).containsKey(className);
   }
 
   public static boolean isDiscovered(ClassLoader classloader, String className, String methodSignature) {
+    if (null == classloader) classloader = BOOTSTRAP;
     return discoveredNodes.contains(new DiscoveredNode(classloader, className, methodSignature));
-  }
-
-  public static DiscoveredNode getDiscoveredNode(Object clazzloader, Object clazz, Object method) {
-    return null;
   }
 
   public static void registerInstrumentation(Instrumentation instrumentation) {

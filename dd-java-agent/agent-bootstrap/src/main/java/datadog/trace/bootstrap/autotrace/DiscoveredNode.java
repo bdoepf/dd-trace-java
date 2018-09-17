@@ -16,14 +16,14 @@ public class DiscoveredNode {
 
   @Override
   public int hashCode() {
-    return classloader.hashCode() + className.hashCode() + methodSignature.hashCode();
+    return classloader.get() == null ? 0 : classloader.get().hashCode() + className.hashCode() + methodSignature.hashCode();
   }
 
   @Override
   public boolean equals(Object obj) {
     if (obj instanceof DiscoveredNode) {
       final DiscoveredNode otherNode = (DiscoveredNode) obj;
-      return classloader.equals(otherNode.classloader) && className.equals(otherNode.className) && methodSignature.equals(otherNode.methodSignature);
+      return classloader.get() == otherNode.classloader.get() && className.equals(otherNode.className) && methodSignature.equals(otherNode.methodSignature);
     }
     return false;
   }

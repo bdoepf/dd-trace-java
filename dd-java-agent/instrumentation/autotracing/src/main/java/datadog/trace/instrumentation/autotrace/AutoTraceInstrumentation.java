@@ -20,9 +20,17 @@ import io.opentracing.util.GlobalTracer;
 import lombok.extern.slf4j.Slf4j;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
+import net.bytebuddy.asm.AsmVisitorWrapper;
+import net.bytebuddy.description.field.FieldDescription;
+import net.bytebuddy.description.field.FieldList;
 import net.bytebuddy.description.method.MethodDescription;
+import net.bytebuddy.description.method.MethodList;
 import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.implementation.Implementation;
+import net.bytebuddy.jar.asm.ClassVisitor;
 import net.bytebuddy.matcher.ElementMatcher;
+import net.bytebuddy.pool.TypePool;
 import net.bytebuddy.utility.JavaModule;
 
 import static io.opentracing.log.Fields.ERROR_OBJECT;
@@ -31,6 +39,9 @@ import static net.bytebuddy.matcher.ElementMatchers.any;
 @Slf4j
 @AutoService(Instrumenter.class)
 public final class AutoTraceInstrumentation extends Instrumenter.Default {
+  private final ThreadLocal<ClassLoader> loaderUnderTransform = new ThreadLocal<>();
+  private final ThreadLocal<TypeDescription> typeUnderTransform = new ThreadLocal<>();
+
   public AutoTraceInstrumentation() {
     super("autotrace");
   }
@@ -40,8 +51,6 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
   public AgentBuilder instrument(final AgentBuilder parentAgentBuilder) {
     // TODO: ugly
     // FIXME: strong classloader ref
-    final ThreadLocal<ClassLoader> loaderUnderTransform = new ThreadLocal<>();
-    final ThreadLocal<TypeDescription> typeUnderTransform = new ThreadLocal<>();
     return parentAgentBuilder
         .type(
             new AgentBuilder.RawMatcher() {
@@ -52,6 +61,8 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
                   JavaModule module,
                   Class<?> classBeingRedefined,
                   ProtectionDomain protectionDomain) {
+                loaderUnderTransform.set(null);
+                typeUnderTransform.set(null);
                 if (TraceDiscoveryGraph.isDiscovered(classLoader, typeDescription.getName())) {
                   loaderUnderTransform.set(classLoader);
                   typeUnderTransform.set(typeDescription);
@@ -70,7 +81,11 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
                     new ElementMatcher<MethodDescription>() {
                       @Override
                       public boolean matches(MethodDescription target) {
-                        return !target.isConstructor();
+                        final String signature = target.getName() + target.getDescriptor();
+                        return !target.isConstructor()
+                          && TraceDiscoveryGraph.isDiscovered(loaderUnderTransform.get(),
+                          typeUnderTransform.get().getName(),
+                          signature);
                       }
                     },
                     AutoTraceAdvice.class.getName()))
