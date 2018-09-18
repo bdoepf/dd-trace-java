@@ -4,6 +4,7 @@ import static io.opentracing.log.Fields.ERROR_OBJECT;
 
 import datadog.trace.api.DDSpanTypes;
 import datadog.trace.api.DDTags;
+import datadog.trace.bootstrap.autotrace.DiscoveredNode;
 import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import datadog.trace.context.TraceScope;
 import io.opentracing.Scope;
@@ -24,7 +25,21 @@ public class Servlet3Advice {
 
   @Advice.OnMethodEnter(suppress = Throwable.class)
   public static Scope startSpan(
+    @Advice.This final Object thiz,
+    @Advice.Origin("#t") final String servletClassName,
+    @Advice.Origin("#m#d") final String nodeSig,
       @Advice.This final Object servlet, @Advice.Argument(0) final ServletRequest req) {
+    {
+      final DiscoveredNode servletNode = TraceDiscoveryGraph.discoverOrGet(thiz.getClass().getClassLoader(), servletClassName, nodeSig);
+      servletNode.expand();
+      for (final DiscoveredNode node : servletNode.getEdges()) {
+        node.enableTracing(true);
+      }
+      if (servletNode.isTracingEnabled()) {
+        System.out.println(">>> SERVLET ADDING " + servletNode);
+      }
+      servletNode.enableTracing(false); // already tracing with servlet instrumentation
+    }
     if (GlobalTracer.get().activeSpan() != null || !(req instanceof HttpServletRequest)) {
       // Tracing might already be applied by the FilterChain.  If so ignore this.
       return null;
@@ -62,9 +77,6 @@ public class Servlet3Advice {
 
   @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
   public static void stopSpan(
-      @Advice.This final Object thiz,
-      @Advice.Origin("#t") final String servletClassName,
-      @Advice.Origin("#m#d") final String nodeSig,
       @Advice.Argument(0) final ServletRequest request,
       @Advice.Argument(1) final ServletResponse response,
       @Advice.Enter final Scope scope,
@@ -75,8 +87,6 @@ public class Servlet3Advice {
         final HttpServletRequest req = (HttpServletRequest) request;
         final HttpServletResponse resp = (HttpServletResponse) response;
         final Span span = scope.span();
-        System.out.println(">>> ADDING " + thiz.getClass().getClassLoader() + " " + servletClassName + " " + nodeSig);
-        TraceDiscoveryGraph.discoverOrGet(thiz.getClass().getClassLoader(), servletClassName, nodeSig).enableTracing(true);
 
         if (throwable != null) {
           if (resp.getStatus() == HttpServletResponse.SC_OK) {

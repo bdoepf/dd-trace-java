@@ -53,6 +53,8 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
           errored false
           tags {
             "$Tags.COMPONENT.key" "autotrace"
+            "span.origin.type" "some.org.Helper"
+            "span.origin.method" "someMethod(J)V"
             defaultTags()
           }
         }
@@ -86,7 +88,7 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
       new Helper().someMethod(0)
     }
     long duration = System.nanoTime() - t1
-    if (duration >= TraceDiscoveryGraph.AUTOTRACE_THRESHOLD_NANO) {
+    if (duration >= TraceDiscoveryGraph.AUTOTRACE_EXPAND_THRESHOLD_NANO) {
       // Trace is abnormally slow. Skip assertion.
       slowTestRun = true
     }
@@ -132,11 +134,8 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
     runUnderTrace("someTrace") {
       new Helper().n1(0, 0, 11, 0)
     }
-    // TEST_WRITER.waitForTraces(1)
 
     then:
-    // TEST_WRITER.size() == 1
-    // TEST_WRITER[0].size() == 4
     assertTraces(TEST_WRITER, 1) {
       trace(0, 4) {
         span(0) {
@@ -153,6 +152,8 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
           errored false
           tags {
             "$Tags.COMPONENT.key" "autotrace"
+            "span.origin.type" "some.org.Helper"
+            "span.origin.method" "n1(JJJJ)V"
             defaultTags()
           }
         }
@@ -162,6 +163,8 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
           errored false
           tags {
             "$Tags.COMPONENT.key" "autotrace"
+            "span.origin.type" "some.org.Helper"
+            "span.origin.method" "n2(JJJ)V"
             defaultTags()
           }
         }
@@ -171,6 +174,8 @@ class AutoTraceInstrumentationTest extends AgentTestRunner {
           errored false
           tags {
             "$Tags.COMPONENT.key" "autotrace"
+            "span.origin.type" "some.org.Helper"
+            "span.origin.method" "n3(JJ)V"
             defaultTags()
           }
         }

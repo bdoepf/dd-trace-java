@@ -12,7 +12,7 @@ public class DiscoveredNode {
   private final String methodSignature;
   // TODO: since each state only has two values use atomic booleans
   private final AtomicReference<ExpansionState> expansionState = new AtomicReference<>(ExpansionState.NOT_EXPANDED);
-  private final AtomicReference<TracingState> tracingState = new AtomicReference<>(TracingState.TRACING_DISABLED);
+  private final AtomicReference<TracingState> tracingState = new AtomicReference<>(TracingState.UNSET);
   private final List<DiscoveredNode> edges = new CopyOnWriteArrayList<>();
 
   public DiscoveredNode(ClassLoader classloader, String className, String methodSignature) {
@@ -31,17 +31,21 @@ public class DiscoveredNode {
 
   @Override
   public String toString() {
-    return classloader.get() + className + "." + methodSignature;
+    return "<" + classloader.get() + "> " + className + "." + methodSignature;
   }
 
   public void enableTracing(boolean allowTracing) {
     if (allowTracing) {
-      if (tracingState.compareAndSet(TracingState.TRACING_DISABLED, TracingState.TRACING_ENABLED)) {
+      if (tracingState.compareAndSet(TracingState.UNSET, TracingState.TRACING_ENABLED)) {
+        System.out.println("-- trace node: " + this);
         retransform();
       }
     } else {
       if (tracingState.compareAndSet(TracingState.TRACING_ENABLED, TracingState.TRACING_DISABLED)) {
+        System.out.println("-- stop trace node: " + this);
         retransform();
+      } else if (tracingState.compareAndSet(TracingState.UNSET, TracingState.TRACING_DISABLED)) {
+        System.out.println("-- never start to trace trace node: " + this);
       }
     }
   }
@@ -56,6 +60,7 @@ public class DiscoveredNode {
 
   public void expand() {
     if (expansionState.get() == ExpansionState.NOT_EXPANDED) {
+      System.out.println("-- expand node: " + this);
       retransform();
     }
   }
@@ -99,6 +104,7 @@ public class DiscoveredNode {
    * Determines if this node can be auto-traced.
    */
   private enum TracingState {
+    UNSET,
     /**
      * In the graph and viable for tracing.
      */

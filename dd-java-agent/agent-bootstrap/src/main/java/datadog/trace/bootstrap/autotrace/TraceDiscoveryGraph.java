@@ -26,7 +26,8 @@ public class TraceDiscoveryGraph {
   /**
    * Discovered Methods which exceed this threshold will be traced.
    */
-  public static final long AUTOTRACE_THRESHOLD_NANO = 10 * 1000000; // 10ms
+  public static final long AUTOTRACE_EXPAND_THRESHOLD_NANO = 10 * 1000000; // 10ms
+  public static final long AUTOTRACE_DISABLE_THRESHOLD_NANO = 1 * 1000000; // 1ms
 
   static final AtomicReference<Instrumentation> instrumentationRef = new AtomicReference<>(null);
   private static final WeakMap<ClassLoader, Map<String, List<DiscoveredNode>>> nodeMap = Provider.<ClassLoader, Map<String, List<DiscoveredNode>>>newWeakMap();

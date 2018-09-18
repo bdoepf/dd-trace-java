@@ -88,7 +88,10 @@ public class MethodExpander implements AsmVisitorWrapper {
 
       @Override
       public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-        edges.add(TraceDiscoveryGraph.discoverOrGet(classLoader, Utils.getClassName(owner), name+descriptor));
+        final DiscoveredNode edge = TraceDiscoveryGraph.discoverOrGet(classLoader, Utils.getClassName(owner), name+descriptor);
+        if (!edges.contains(edge)) {
+          edges.add(edge);
+        }
         super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
       }
 

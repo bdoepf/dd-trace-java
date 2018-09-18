@@ -9,6 +9,8 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.api.DDTags;
+import datadog.trace.bootstrap.autotrace.DiscoveredNode;
+import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import io.opentracing.Scope;
 import io.opentracing.Span;
 import io.opentracing.tag.Tags;
@@ -58,7 +60,9 @@ public final class JaxRsAnnotationsInstrumentation extends Instrumenter.Default 
   public static class JaxRsAnnotationsAdvice {
 
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static Scope nameSpan(@Advice.Origin final Method method) {
+    public static Scope nameSpan(@Advice.Origin final Method method,
+    @Advice.Origin("#m#d") final String nodeSig
+    ) {
 
       // TODO: do we need caching for this?
       final LinkedList<Path> classPaths = new LinkedList<>();
@@ -114,6 +118,19 @@ public final class JaxRsAnnotationsInstrumentation extends Instrumenter.Default 
       }
 
       final String operationName = className + "." + methodName;
+
+
+      {
+        final DiscoveredNode jaxNode = TraceDiscoveryGraph.discoverOrGet(clazz.getClassLoader(), clazz.getName(), nodeSig);
+        jaxNode.expand();
+        for (final DiscoveredNode node : jaxNode.getEdges()) {
+          node.enableTracing(true);
+        }
+        if (jaxNode.isTracingEnabled()) {
+          System.out.println(">>> SERVLET ADDING " + jaxNode);
+        }
+        jaxNode.enableTracing(false); // already tracing with servlet instrumentation
+      }
 
       return GlobalTracer.get()
           .buildSpan(operationName)
