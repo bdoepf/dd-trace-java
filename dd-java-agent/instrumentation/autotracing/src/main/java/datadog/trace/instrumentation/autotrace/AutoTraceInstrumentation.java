@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import datadog.trace.agent.tooling.Utils;
+import datadog.trace.bootstrap.autotrace.DiscoveredNode;
 import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import io.opentracing.Scope;
 import io.opentracing.Tracer;
@@ -81,10 +82,12 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
                       @Override
                       public boolean matches(MethodDescription target) {
                         final String signature = target.getName() + target.getDescriptor();
-                        return !target.isConstructor()
-                          && TraceDiscoveryGraph.isDiscovered(loaderUnderTransform.get(),
-                          typeUnderTransform.get().getName(),
-                          signature);
+                        final DiscoveredNode node = TraceDiscoveryGraph.getDiscoveredNode(loaderUnderTransform.get(), typeUnderTransform.get().getName(), signature);
+                        boolean match = !target.isConstructor() && node != null && node.isTracingEnabled();
+                        if (match) {
+                          System.out.println(" autotrace! " + target);
+                        }
+                        return match;
                       }
                     },
                     AutoTraceAdvice.class.getName()))
@@ -121,12 +124,13 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopTimerAndCreateSpan(
+        @Advice.This final Object thiz,
         @Advice.Origin("#t") final String typeName,
         @Advice.Origin("#m") final String methodName,
+        @Advice.Origin("#m#d") final String nodeSig,
         @Advice.Enter final long startTS,
         @Advice.Thrown final Throwable throwable) {
       // TODO
-      System.out.println("TRACE METHOD? " + typeName + "." + methodName + " ");
       if (startTS > Long.MIN_VALUE) {
         final Tracer globalTracer = GlobalTracer.get(); // TODO: move to method variable scope
         // ensure the active span was not removed in the method body
@@ -147,6 +151,18 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
               scope.span().log(Collections.singletonMap(ERROR_OBJECT, throwable));
             }
             scope.close();
+
+            // TODO: retransform to remove unneeded expansion calls after first pass
+            {
+              System.out.println(" LOOK FOR NODE: " + thiz.getClass().getClassLoader() + " (" + thiz.getClass().getName() + ":" + thiz +  ") <-> " + typeName + " " + nodeSig);
+              final DiscoveredNode node = TraceDiscoveryGraph.getDiscoveredNode(thiz.getClass().getClassLoader(), typeName, nodeSig);
+              if (node != null) {
+                node.expand();
+                for (DiscoveredNode edge : node.getEdges()) {
+                  edge.enableTracing(true);
+                }
+              }
+            }
           }
         }
       }

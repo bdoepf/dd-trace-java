@@ -1,5 +1,6 @@
 package datadog.trace.bootstrap.autotrace;
 
+import java.lang.instrument.UnmodifiableClassException;
 import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -9,8 +10,9 @@ public class DiscoveredNode {
   private final WeakReference<ClassLoader> classloader;
   private final String className;
   private final String methodSignature;
+  // TODO: since each state only has two values use atomic booleans
   private final AtomicReference<ExpansionState> expansionState = new AtomicReference<>(ExpansionState.NOT_EXPANDED);
-  private final AtomicReference<TracingState> tracingState = new AtomicReference<>(TracingState.TRACING_ENABLED);
+  private final AtomicReference<TracingState> tracingState = new AtomicReference<>(TracingState.TRACING_DISABLED);
   private final List<DiscoveredNode> edges = new CopyOnWriteArrayList<>();
 
   public DiscoveredNode(ClassLoader classloader, String className, String methodSignature) {
@@ -32,21 +34,16 @@ public class DiscoveredNode {
     return classloader.get() + className + "." + methodSignature;
   }
 
-  public void addEdges(List<DiscoveredNode> edges) {
-    if (expansionState.compareAndSet(ExpansionState.NOT_EXPANDED, ExpansionState.EXPANDED)) {
-      this.edges.addAll(edges);
-    } else {
-      throw new IllegalStateException("Cannot add edges to an expanded node: " + this);
-    }
-  }
-
   public void enableTracing(boolean allowTracing) {
     if (allowTracing) {
-      tracingState.set(TracingState.TRACING_ENABLED);
+      if (tracingState.compareAndSet(TracingState.TRACING_DISABLED, TracingState.TRACING_ENABLED)) {
+        retransform();
+      }
     } else {
-      tracingState.set(TracingState.TRACING_DISABLED);
+      if (tracingState.compareAndSet(TracingState.TRACING_ENABLED, TracingState.TRACING_DISABLED)) {
+        retransform();
+      }
     }
-    // TODO: retransform?
   }
 
   public boolean isTracingEnabled() {
@@ -55,6 +52,33 @@ public class DiscoveredNode {
 
   public boolean isExpanded() {
     return expansionState.get() == ExpansionState.EXPANDED;
+  }
+
+  public void expand() {
+    if (expansionState.get() == ExpansionState.NOT_EXPANDED) {
+      retransform();
+    }
+  }
+
+  public void addEdges(List<DiscoveredNode> edges) {
+    if (expansionState.compareAndSet(ExpansionState.NOT_EXPANDED, ExpansionState.EXPANDED)) {
+      this.edges.addAll(edges);
+    } else {
+      throw new IllegalStateException("Cannot add edges to an expanded node: " + this);
+    }
+  }
+
+  // FIXME: bad design
+  private void retransform() {
+    try {
+      TraceDiscoveryGraph.instrumentationRef.get().retransformClasses(classloader.get().loadClass(className));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public List<DiscoveredNode> getEdges() {
+    return edges;
   }
 
   /**

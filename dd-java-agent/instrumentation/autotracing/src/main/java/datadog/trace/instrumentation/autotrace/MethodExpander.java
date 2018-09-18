@@ -70,6 +70,7 @@ public class MethodExpander implements AsmVisitorWrapper {
       final String nodeSignature = name+descriptor;
       for (final DiscoveredNode node : nodesToExpand) {
         if (node.getMethodSignature().equals(nodeSignature) && (!node.isExpanded())) {
+          System.out.println("-- EXPAND METHOD: " + className + "." + name + descriptor);
           mv = new ExpansionMethodVisitor(node, mv);
         }
       }

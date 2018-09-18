@@ -28,7 +28,7 @@ public class TraceDiscoveryGraph {
    */
   public static final long AUTOTRACE_THRESHOLD_NANO = 10 * 1000000; // 10ms
 
-  private static final AtomicReference<Instrumentation> instrumentationRef = new AtomicReference<>(null);
+  static final AtomicReference<Instrumentation> instrumentationRef = new AtomicReference<>(null);
   private static final WeakMap<ClassLoader, Map<String, List<DiscoveredNode>>> nodeMap = Provider.<ClassLoader, Map<String, List<DiscoveredNode>>>newWeakMap();
 
   // FIXME: use standard bootstrap placeholder (see Utils)
@@ -76,18 +76,7 @@ public class TraceDiscoveryGraph {
 
     final DiscoveredNode newNode = new DiscoveredNode(classloader, className, methodSignature);
     nodeList.add(newNode);
-    final Instrumentation instrumentation = instrumentationRef.get();
-    if (instrumentation != null) {
-      try {
-        instrumentation.retransformClasses(classloader.loadClass(className));
-      } catch (Exception e) {
-        log.debug("Failed to retransform " + className + " on loader " + classloader, e);
-      }
-    }
     return newNode;
-  }
-
-  public static void expand(Object clazz, Object method) {
   }
 
   public static boolean isDiscovered(ClassLoader classloader, String className) {
@@ -102,7 +91,7 @@ public class TraceDiscoveryGraph {
     return null;
   }
 
-  public static boolean isDiscovered(ClassLoader classloader, String className, String methodSignature) {
+  public static DiscoveredNode getDiscoveredNode(ClassLoader classloader, String className, String methodSignature) {
     if (null == classloader) classloader = BOOTSTRAP;
     final Map<String, List<DiscoveredNode>> classMap = nodeMap.get(classloader);
     if (null != classMap) {
@@ -110,12 +99,16 @@ public class TraceDiscoveryGraph {
       if (null != nodes) {
         for (final DiscoveredNode node : nodes) {
           if (node.getMethodSignature().equals(methodSignature)) {
-            return true;
+            return node;
           }
         }
       }
     }
-    return false;
+    return null;
+  }
+
+  public static boolean isDiscovered(ClassLoader classloader, String className, String methodSignature) {
+    return getDiscoveredNode(classloader, className, methodSignature) != null;
   }
 
   public static void registerInstrumentation(Instrumentation instrumentation) {
