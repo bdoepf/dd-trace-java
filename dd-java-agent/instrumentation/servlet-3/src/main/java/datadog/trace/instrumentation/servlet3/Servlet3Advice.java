@@ -4,6 +4,7 @@ import static io.opentracing.log.Fields.ERROR_OBJECT;
 
 import datadog.trace.api.DDSpanTypes;
 import datadog.trace.api.DDTags;
+import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import datadog.trace.context.TraceScope;
 import io.opentracing.Scope;
 import io.opentracing.Span;
@@ -61,6 +62,9 @@ public class Servlet3Advice {
 
   @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
   public static void stopSpan(
+      @Advice.This final Object thiz,
+      @Advice.Origin("#t") final String servletClassName,
+      @Advice.Origin("#m#d") final String nodeSig,
       @Advice.Argument(0) final ServletRequest request,
       @Advice.Argument(1) final ServletResponse response,
       @Advice.Enter final Scope scope,
@@ -71,6 +75,8 @@ public class Servlet3Advice {
         final HttpServletRequest req = (HttpServletRequest) request;
         final HttpServletResponse resp = (HttpServletResponse) response;
         final Span span = scope.span();
+        System.out.println(">>> ADDING " + thiz.getClass().getClassLoader() + " " + servletClassName + " " + nodeSig);
+        TraceDiscoveryGraph.discoverOrGet(thiz.getClass().getClassLoader(), servletClassName, nodeSig).enableTracing(true);
 
         if (throwable != null) {
           if (resp.getStatus() == HttpServletResponse.SC_OK) {

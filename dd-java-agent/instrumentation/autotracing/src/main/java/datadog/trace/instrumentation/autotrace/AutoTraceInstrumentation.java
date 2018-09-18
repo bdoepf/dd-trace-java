@@ -14,6 +14,7 @@ import datadog.trace.agent.tooling.Utils;
 import datadog.trace.bootstrap.autotrace.DiscoveredNode;
 import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import io.opentracing.Scope;
+import io.opentracing.Span;
 import io.opentracing.Tracer;
 import io.opentracing.tag.Tags;
 import io.opentracing.util.GlobalTracer;
@@ -104,12 +105,19 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
 
   @Override
   public ElementMatcher<? super TypeDescription> typeMatcher() {
-    throw new RuntimeException("FIXME");
+    return new ElementMatcher<TypeDescription>() {
+      @Override
+      public boolean matches(TypeDescription target) {
+        // FIXME
+        return false;
+      }
+    };
   }
 
   @Override
   public Map<ElementMatcher, String> transformers() {
-    throw new RuntimeException("FIXME");
+    // FIXME
+    return Collections.EMPTY_MAP;
   }
 
   public static class AutoTraceAdvice {
@@ -142,9 +150,10 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
           if (durationNano >= TraceDiscoveryGraph.AUTOTRACE_THRESHOLD_NANO) {
             final Scope scope =
                 GlobalTracer.get()
-                    .buildSpan(typeName.replaceAll("^.*\\.([^\\.]+)", "$1") + "." + methodName)
+                  // TODO: $ -> _ ??
+                    .buildSpan(typeName.replaceAll("^.*\\.([^\\.]+)", "$1").replace('$', '_') + "." + methodName.replace('$', '_'))
                     .withTag(Tags.COMPONENT.getKey(), "autotrace")
-                    .withStartTimestamp(TimeUnit.NANOSECONDS.toMicros(startTS))
+                    .withStartTimestamp(TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis()) - TimeUnit.NANOSECONDS.toMicros(durationNano))
                     .startActive(true);
             if (throwable != null) {
               Tags.ERROR.set(scope.span(), true);
