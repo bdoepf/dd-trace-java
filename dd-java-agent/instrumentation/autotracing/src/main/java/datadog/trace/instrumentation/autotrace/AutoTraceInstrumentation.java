@@ -14,6 +14,7 @@ import datadog.trace.api.interceptor.MutableSpan;
 import datadog.trace.bootstrap.autotrace.DiscoveredNode;
 import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import io.opentracing.Scope;
+import io.opentracing.Span;
 import io.opentracing.tag.Tags;
 import io.opentracing.util.GlobalTracer;
 import lombok.extern.slf4j.Slf4j;
@@ -117,11 +118,17 @@ public final class AutoTraceInstrumentation extends Instrumenter.Default {
       @Advice.Origin("#t") final String typeName,
       @Advice.Origin("#m") final String methodName,
       @Advice.Origin("#m#d") final String nodeSig) {
-      if (GlobalTracer.get().activeSpan() != null) {
+      final Span activeSpan = GlobalTracer.get().activeSpan();
+      if (activeSpan != null) {
+        final String autoTraceOpName = typeName.replaceAll("^.*\\.([^\\.]+)", "$1").replace('$', '_') + "." + methodName.replace('$', '_');
+        if (((MutableSpan) activeSpan).getOperationName().equals(autoTraceOpName)) {
+          // don't auto-trace recursive calls
+          return null;
+        }
         final Scope scope =
           GlobalTracer.get()
             // TODO: $ -> _ ??
-            .buildSpan(typeName.replaceAll("^.*\\.([^\\.]+)", "$1").replace('$', '_') + "." + methodName.replace('$', '_'))
+            .buildSpan(autoTraceOpName)
             .withTag(Tags.COMPONENT.getKey(), "autotrace")
             .withTag("span.origin.type", thiz.getClass().getName())
             // TODO: something more human-readable than a descriptor

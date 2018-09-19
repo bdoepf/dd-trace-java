@@ -127,9 +127,9 @@ public final class JaxRsAnnotationsInstrumentation extends Instrumenter.Default 
           node.enableTracing(true);
         }
         if (jaxNode.isTracingEnabled()) {
-          System.out.println(">>> SERVLET ADDING " + jaxNode);
+          System.out.println(">>> JAX ADDING " + jaxNode);
         }
-        jaxNode.enableTracing(false); // already tracing with servlet instrumentation
+        jaxNode.enableTracing(false); // already tracing with ootb instrumentation
       }
 
       return GlobalTracer.get()

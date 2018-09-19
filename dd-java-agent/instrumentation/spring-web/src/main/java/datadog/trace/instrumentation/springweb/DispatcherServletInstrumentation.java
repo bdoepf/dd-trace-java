@@ -9,6 +9,8 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
+import datadog.trace.bootstrap.autotrace.DiscoveredNode;
+import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import io.opentracing.Scope;
 import io.opentracing.Span;
 import io.opentracing.Tracer;
@@ -55,7 +57,24 @@ public final class DispatcherServletInstrumentation extends Instrumenter.Default
   public static class DispatcherAdvice {
 
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static Scope startSpan(@Advice.Argument(0) final ModelAndView mv) {
+    public static Scope startSpan(
+      @Advice.This final Object thiz,
+      @Advice.Origin("#m#d") final String nodeSig,
+      @Advice.Argument(0) final ModelAndView mv) {
+
+      /*
+      {
+        final DiscoveredNode springNode = TraceDiscoveryGraph.discoverOrGet(thiz.getClass().getClassLoader(), thiz.getClass().getName(), nodeSig);
+        springNode.expand();
+        for (final DiscoveredNode node : springNode.getEdges()) {
+          node.enableTracing(true);
+        }
+        if (springNode.isTracingEnabled()) {
+          System.out.println(">>> SPRING ADDING " + springNode);
+        }
+        springNode.enableTracing(false); // already tracing with ootb instrumentation
+      }
+      */
 
       final Tracer.SpanBuilder builder =
           GlobalTracer.get()

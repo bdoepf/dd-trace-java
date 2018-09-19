@@ -15,6 +15,8 @@ import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.api.DDSpanTypes;
 import datadog.trace.api.DDTags;
+import datadog.trace.bootstrap.autotrace.DiscoveredNode;
+import datadog.trace.bootstrap.autotrace.TraceDiscoveryGraph;
 import io.opentracing.Scope;
 import io.opentracing.Span;
 import io.opentracing.tag.Tags;
@@ -86,6 +88,19 @@ public final class HandlerAdapterInstrumentation extends Instrumenter.Default {
         final Method method = ((HandlerMethod) handler).getMethod();
         clazz = method.getDeclaringClass();
         methodName = method.getName();
+
+        {
+          final DiscoveredNode springNode = TraceDiscoveryGraph.discoverOrGet(clazz.getClassLoader(), clazz.getName(), methodName + TraceDiscoveryGraph.getMethodDescriptor(method));
+          springNode.expand();
+          for (final DiscoveredNode node : springNode.getEdges()) {
+            node.enableTracing(true);
+          }
+          if (springNode.isTracingEnabled()) {
+            System.out.println(">>> SPRING ADDING " + springNode);
+          }
+          springNode.enableTracing(false); // already tracing with ootb instrumentation
+        }
+
       } else if (handler instanceof HttpRequestHandler) {
         // org.springframework.web.servlet.mvc.HttpRequestHandlerAdapter
         clazz = handler.getClass();

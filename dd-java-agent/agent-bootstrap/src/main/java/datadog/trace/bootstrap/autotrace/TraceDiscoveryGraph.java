@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,44 @@ public class TraceDiscoveryGraph {
   };
 
   private TraceDiscoveryGraph() {}
+
+  private static String getDescriptorForClass(final Class c) {
+    if(c.isPrimitive()) {
+        if(c==byte.class)
+            return "B";
+        if(c==char.class)
+            return "C";
+        if(c==double.class)
+            return "D";
+        if(c==float.class)
+            return "F";
+        if(c==int.class)
+            return "I";
+        if(c==long.class)
+            return "J";
+        if(c==short.class)
+            return "S";
+        if(c==boolean.class)
+            return "Z";
+        if(c==void.class)
+            return "V";
+        throw new RuntimeException("Unrecognized primitive "+c);
+    }
+    if(c.isArray()) {
+      // FIXME: primitive arrays?
+      return c.getName().replace('.', '/');
+    }
+    return ('L'+c.getName()+';').replace('.', '/');
+}
+
+  public static String getMethodDescriptor(Method m) {
+    String s = "(";
+    for(final Class paramClass : m.getParameterTypes()) {
+      s += getDescriptorForClass(paramClass);
+    }
+    s += ')';
+    return s + getDescriptorForClass(m.getReturnType());
+  }
 
   public static DiscoveredNode discoverOrGet(ClassLoader classloader, String className, String methodSignature) {
     if (null == classloader) classloader = BOOTSTRAP;
